@@ -6,33 +6,48 @@ defmodule Slack.Sends do
   a string in the format of `"#CHANNEL_NAME"`, `"@USER_NAME"`, or any ID that
   Slack understands.
   """
-  def send_message(text, channel = "#" <> channel_name, slack) do
+  def send_message(text, channel, slack) do
+    send_message(text,[],channel, slack)
+  end
+
+  def send_message(text, attachments, channel = "#" <> channel_name, slack) do
     channel_id = Lookups.lookup_channel_id(channel, slack)
 
     if channel_id do
-      send_message(text, channel_id, slack)
+      send_message(text, attachments, channel_id, slack)
     else
       raise ArgumentError, "channel ##{channel_name} not found"
     end
   end
-  def send_message(text, user = "@" <> _user_name, slack) do
+  def send_message(text, attachments, user = "@" <> _user_name, slack) do
     direct_message_id = Lookups.lookup_direct_message_id(user, slack)
 
     if direct_message_id do
-      send_message(text, direct_message_id, slack)
+      send_message(text, attachments, direct_message_id, slack)
     else
       open_im_channel(
         slack.token,
         Lookups.lookup_user_id(user, slack),
-        fn id -> send_message(text, id, slack) end,
+        fn id -> send_message(text, attachments, id, slack) end,
         fn _reason -> :delivery_failed end
       )
     end
   end
-  def send_message(text, channel, slack) do
+
+  def send_message(text, [], channel, slack) do
     %{
       type: "message",
       text: text,
+      channel: channel
+    }
+      |> JSX.encode!
+      |> send_raw(slack)
+  end
+  def send_message(text, attachments, channel, slack) do
+    %{
+      type: "message",
+      text: text,
+      attachments: attachments,
       channel: channel
     }
       |> JSX.encode!
